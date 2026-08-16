@@ -1,0 +1,26 @@
+# Core (needed for everything in Phase 1 as built)
+numpy>=1.26
+scikit-learn>=1.4
+requests>=2.31
+
+# LLM backends (install whichever you plan to use)
+anthropic>=0.34        # for AnthropicClient
+openai>=1.40            # for OpenAICompatibleClient (also works with local vLLM servers)
+
+# Testing
+pytest>=8.0
+
+# --- Phase 2: fine-tuning (needs a GPU — Colab free tier works) ---
+# torch>=2.2
+# transformers>=4.42
+# peft>=0.11                     # LoRA/QLoRA fine-tuning
+# bitsandbytes>=0.43              # 4-bit quantization for QLoRA
+# accelerate>=0.30
+# datasets>=2.19
+
+# --- Phase 1 upgrade path (not required yet, see docs/PHASE1_NOTES.md) ---
+# sentence-transformers>=3.0   # DenseEmbedder — real neural embeddings
+# faiss-cpu>=1.8                # NumpyVectorStore -> FAISS, for corpora beyond ~50k chunks
+
+# --- Phase 3+ (quantized inference serving, not needed yet) ---
+# vllm                          # or tensorrt-llm, depending on your GPU setup

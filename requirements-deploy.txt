@@ -1,0 +1,12 @@
+# The deployed rag_server.py only needs these — it's the offline
+# TF-IDF retrieval pipeline + eval checks (Phases 1-2's logic),
+# NOT the GPU-only fine-tuning/quantization scripts (those never
+# run on a deployed web service, only on your own GPU machine).
+numpy>=1.26
+scikit-learn>=1.4
+requests>=2.31
+
+# Uncomment if RAG_LLM_BACKEND=anthropic on the deployed service
+# (otherwise it runs with MockClient, which is fine for a demo that's
+# meant to show the RAG/eval pipeline working, not generate real answers)
+# anthropic>=0.34

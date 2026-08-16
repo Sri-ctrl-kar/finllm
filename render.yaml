@@ -1,0 +1,33 @@
+services:
+  # Service 1: the Python RAG core (Phases 1-2's retrieval + eval logic)
+  - type: web
+    name: finllm-rag-service
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-deploy.txt
+    startCommand: python -m src.service.rag_server
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      # Set this in Render's dashboard if you want real generated
+      # answers instead of MockClient's placeholder text:
+      # - key: ANTHROPIC_API_KEY
+      #   sync: false
+
+  # Service 2: the Express app + dashboard
+  - type: web
+    name: finllm-rag-console
+    runtime: node
+    plan: free
+    rootDir: app
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      # IMPORTANT: Render assigns finllm-rag-service's public URL only
+      # after its first deploy finishes — you can't know it in advance,
+      # so this can't be auto-filled here reliably. After both services
+      # deploy once, copy finllm-rag-service's URL from the Render
+      # dashboard into this variable and redeploy finllm-rag-console.
+      # See docs/PHASE5_DEPLOYMENT.md for the exact steps.
+      - key: RAG_SERVICE_URL
+        value: "https://REPLACE-WITH-finllm-rag-service-URL.onrender.com"

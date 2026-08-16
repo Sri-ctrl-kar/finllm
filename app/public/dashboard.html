@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>FinLLM-RAG Console</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #161925; --border: #262b3d;
+    --text: #e6e8f0; --dim: #8b90a8; --good: #4ade80; --warn: #fbbf24; --bad: #f87171; --accent: #7c8cff;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 24px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .stat .label { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat .value { font-size: 24px; font-weight: 600; margin-top: 4px; }
+  .stat .value.good { color: var(--good); }
+  .stat .value.warn { color: var(--warn); }
+  .stat .value.bad { color: var(--bad); }
+
+  .ask-box { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 28px; }
+  .ask-box textarea { width: 100%; background: #0d0f17; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 14px; resize: vertical; min-height: 60px; }
+  .ask-box button { margin-top: 10px; background: var(--accent); color: #0f1117; border: none; border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; }
+  .ask-box button:disabled { opacity: 0.5; cursor: default; }
+  .answer { margin-top: 14px; padding: 12px; background: #0d0f17; border-radius: 8px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  .badges { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--dim); }
+  .badge.good { border-color: var(--good); color: var(--good); }
+  .badge.bad { border-color: var(--bad); color: var(--bad); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--dim); font-weight: 500; text-transform: uppercase; font-size: 11px; }
+  td.q { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .dot.good { background: var(--good); } .dot.bad { background: var(--bad); }
+</style>
+</head>
+<body>
+  <h1>FinLLM-RAG Console</h1>
+  <div class="sub">Phase 4 — live monitoring of hallucination signals, latency, and cost across real requests</div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="ask-box">
+    <textarea id="question" placeholder="Ask a question about the filing, e.g. What was total net revenue?"></textarea>
+    <br />
+    <button id="askBtn" onclick="ask()">Ask</button>
+    <div id="answerBox"></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th></th><th>Question</th><th>Latency</th><th>Numeric Acc.</th><th>Cost</th><th>Time</th></tr>
+    </thead>
+    <tbody id="recentRows"></tbody>
+  </table>
+
+  <script>
+    async function loadStats() {
+      const res = await fetch('/api/metrics/summary');
+      const s = await res.json();
+      const statClass = (v, warnAt, badAt, higherIsBad = true) => {
+        if (higherIsBad) return v >= badAt ? 'bad' : v >= warnAt ? 'warn' : 'good';
+        return v <= badAt ? 'bad' : v <= warnAt ? 'warn' : 'good';
+      };
+
+      document.getElementById('stats').innerHTML = `
+        <div class="stat"><div class="label">Total Requests</div><div class="value">${s.totalRequests}</div></div>
+        <div class="stat"><div class="label">Avg Latency</div><div class="value">${s.avgLatencyMs}ms</div></div>
+        <div class="stat"><div class="label">p95 Latency</div><div class="value">${s.p95LatencyMs}ms</div></div>
+        <div class="stat"><div class="label">Hallucination Flag Rate</div><div class="value ${statClass(s.hallucinationFlagRate, 0.1, 0.3)}">${(s.hallucinationFlagRate * 100).toFixed(0)}%</div></div>
+        <div class="stat"><div class="label">Avg Numeric Accuracy</div><div class="value ${statClass(s.avgNumericAccuracy, 0.7, 0.5, false)}">${(s.avgNumericAccuracy * 100).toFixed(0)}%</div></div>
+        <div class="stat"><div class="label">Est. Total Cost</div><div class="value">$${s.totalEstimatedCostUsd.toFixed(4)}</div></div>
+      `;
+    }
+
+    async function loadRecent() {
+      const res = await fetch('/api/metrics/recent?limit=15');
+      const rows = await res.json();
+      document.getElementById('recentRows').innerHTML = rows.map(r => {
+        const flagged = r.flaggedLowOverlap || (r.ungroundedNumbers && r.ungroundedNumbers.length > 0);
+        return `<tr>
+          <td><span class="dot ${flagged ? 'bad' : 'good'}"></span></td>
+          <td class="q" title="${escapeHtml(r.question)}">${escapeHtml(r.question)}</td>
+          <td>${r.latencyMs}ms</td>
+          <td>${(r.numericAccuracy * 100).toFixed(0)}%</td>
+          <td>$${(r.estimatedCostUsd || 0).toFixed(5)}</td>
+          <td>${new Date(r.timestamp).toLocaleTimeString()}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function ask() {
+      const question = document.getElementById('question').value.trim();
+      if (!question) return;
+      const btn = document.getElementById('askBtn');
+      btn.disabled = true;
+      btn.textContent = 'Asking...';
+
+      try {
+        const res = await fetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question }),
+        });
+        const result = await res.json();
+
+        if (!res.ok) {
+          document.getElementById('answerBox').innerHTML = `<div class="answer">Error: ${escapeHtml(result.error || 'unknown error')}</div>`;
+        } else {
+          const flagged = result.flaggedLowOverlap || (result.ungroundedNumbers && result.ungroundedNumbers.length > 0);
+          document.getElementById('answerBox').innerHTML = `
+            <div class="answer">${escapeHtml(result.answer)}</div>
+            <div class="badges">
+              <span class="badge ${flagged ? 'bad' : 'good'}">${flagged ? 'Flagged for review' : 'Grounded'}</span>
+              <span class="badge">Numeric accuracy: ${(result.numericAccuracy * 100).toFixed(0)}%</span>
+              <span class="badge">${result.latencyMs}ms</span>
+              <span class="badge">$${result.estimatedCostUsd.toFixed(5)} est.</span>
+            </div>
+          `;
+        }
+
+        await loadStats();
+        await loadRecent();
+      } catch (e) {
+        document.getElementById('answerBox').innerHTML = `<div class="answer">Request failed: ${e.message}</div>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Ask';
+      }
+    }
+
+    loadStats();
+    loadRecent();
+    setInterval(() => { loadStats(); loadRecent(); }, 5000);
+  </script>
+</body>
+</html>
