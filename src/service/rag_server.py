@@ -36,6 +36,17 @@ from ..rag.qa_chain import RAGChain
 from ..eval.numeric_accuracy import check_numeric_accuracy
 from ..eval.hallucination_checker import check_hallucination_signals
 
+from pathlib import Path
+
+# Automatically load .env if present
+env_file = Path(__file__).resolve().parent.parent.parent / ".env"
+if env_file.exists():
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+
 # Render/Fly/Heroku-style hosts inject PORT at runtime — reading it
 # here (falling back to 8010 for local dev) is what makes this
 # deployable as-is instead of needing host-specific edits.
@@ -52,8 +63,8 @@ _chunks = chunk_sections(
 _retriever = Retriever.build(_chunks)
 
 
-def _build_chain(llm_backend: str) -> RAGChain:
-    return RAGChain(_retriever, build_llm(llm_backend), k=3)
+def _build_chain(llm_backend: str, api_key: str | None = None) -> RAGChain:
+    return RAGChain(_retriever, build_llm(llm_backend, api_key=api_key), k=3)
 
 
 class RAGRequestHandler(BaseHTTPRequestHandler):
@@ -83,14 +94,19 @@ class RAGRequestHandler(BaseHTTPRequestHandler):
             body = json.loads(raw_body)
             question = body["question"]
             llm_backend = body.get("llmBackend", "mock")
+            api_key = body.get("apiKey") or self.headers.get("x-api-key")
         except (json.JSONDecodeError, KeyError):
             self._send_json(400, {"error": "expected JSON body: {\"question\": \"...\"}"})
             return
 
-        start = time.perf_counter()
-        chain = _build_chain(llm_backend)
-        result = chain.ask(question)
-        latency_ms = (time.perf_counter() - start) * 1000
+        try:
+            start = time.perf_counter()
+            chain = _build_chain(llm_backend, api_key=api_key)
+            result = chain.ask(question)
+            latency_ms = (time.perf_counter() - start) * 1000
+        except Exception as e:
+            self._send_json(500, {"error": f"LLM Generation Error: {str(e)}"})
+            return
 
         source_context = "\n".join(s.chunk.text for s in result.sources)
         numeric = check_numeric_accuracy(result.answer, source_context)

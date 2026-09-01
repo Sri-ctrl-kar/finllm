@@ -51,13 +51,13 @@ def load_sample_sections() -> dict:
     return sections
 
 
-def build_llm(name: str):
+def build_llm(name: str, api_key: str | None = None):
     if name == "mock":
         return MockClient()
     if name == "anthropic":
-        return AnthropicClient()
+        return AnthropicClient(api_key=api_key)
     if name == "openai":
-        return OpenAICompatibleClient()
+        return OpenAICompatibleClient(api_key=api_key)
     raise ValueError(f"Unknown --llm option: {name}")
 
 

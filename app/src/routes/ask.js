@@ -8,7 +8,7 @@ function createAskRoute() {
 
   router.post('/', async (req, res) => {
     try {
-      const { question, llmBackend } = req.body || {};
+      const { question, llmBackend, apiKey } = req.body || {};
       if (!question) {
         return res.status(400).json({ error: 'question is required' });
       }
@@ -16,7 +16,7 @@ function createAskRoute() {
       const ragResponse = await fetch(`${RAG_SERVICE_URL}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, llmBackend: llmBackend || 'mock' }),
+        body: JSON.stringify({ question, llmBackend: llmBackend || 'mock', apiKey }),
       });
 
       if (!ragResponse.ok) {
