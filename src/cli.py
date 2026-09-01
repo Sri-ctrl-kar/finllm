@@ -22,7 +22,7 @@ from pathlib import Path
 from .pipeline.chunker import chunk_sections
 from .rag.retriever import Retriever
 from .rag.qa_chain import RAGChain
-from .llm.client import MockClient, AnthropicClient, OpenAICompatibleClient
+from .llm.client import MockClient, AnthropicClient, OpenAICompatibleClient, OllamaClient
 
 SAMPLE_FILING_PATH = Path(__file__).parent / "data" / "sample_filing.txt"
 
@@ -58,13 +58,16 @@ def build_llm(name: str, api_key: str | None = None):
         return AnthropicClient(api_key=api_key)
     if name == "openai":
         return OpenAICompatibleClient(api_key=api_key)
+    if name == "ollama" or name.startswith("ollama:"):
+        model_name = name.split(":", 1)[1] if ":" in name else "llama3.2"
+        return OllamaClient(model=model_name)
     raise ValueError(f"Unknown --llm option: {name}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="FinLLM-RAG Phase 1 CLI")
-    parser.add_argument("--llm", default="mock", choices=["mock", "anthropic", "openai"],
-                         help="which LLM backend to use for the final answer (default: mock, no API key needed)")
+    parser.add_argument("--llm", default="mock",
+                         help="which LLM backend to use for the final answer (mock, ollama, anthropic, openai)")
     parser.add_argument("--k", type=int, default=3, help="number of chunks to retrieve per question")
     parser.add_argument("question", nargs="?", help="question to ask; omit for an interactive prompt loop")
     args = parser.parse_args()

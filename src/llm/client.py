@@ -77,6 +77,31 @@ class OpenAICompatibleClient:
         return response.choices[0].message.content
 
 
+class OllamaClient:
+    """Connects to a local Ollama instance (default: http://localhost:11434). Zero API keys required."""
+
+    def __init__(self, model: str = "llama3.2", base_url: str = "http://localhost:11434"):
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+
+    def generate(self, prompt: str, max_tokens: int = 500) -> str:
+        import requests
+
+        res = requests.post(
+            f"{self.base_url}/api/generate",
+            json={
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"num_predict": max_tokens},
+            },
+            timeout=120,
+        )
+        if not res.ok:
+            raise RuntimeError(f"Ollama error ({res.status_code}): {res.text}")
+        return res.json().get("response", "").strip()
+
+
 class MockClient:
     """
     Zero-dependency, zero-API-key stand-in so the RAG chain is
@@ -88,3 +113,4 @@ class MockClient:
 
     def generate(self, prompt: str, max_tokens: int = 500) -> str:
         return f"[MockClient received a prompt of {len(prompt)} chars — wire up a real LLMClient for real answers]"
+

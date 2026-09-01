@@ -52,11 +52,14 @@
     <textarea id="question" placeholder="Ask a question about the filing, e.g. What was total net revenue and how did it grow?"></textarea>
     <div class="controls-row">
       <select id="llmBackend" class="select-input" onchange="onBackendChange()">
+        <option value="ollama:llama3.2">🦙 Ollama: llama3.2 (Local, Free)</option>
+        <option value="ollama:llama3.1">🦙 Ollama: llama3.1 (Local, Free)</option>
+        <option value="ollama:qwen3:14b">🤖 Ollama: qwen3:14b (Local, Free)</option>
         <option value="mock">Mock LLM (Offline Demo)</option>
         <option value="openai">OpenAI (gpt-4o-mini)</option>
         <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
       </select>
-      <input type="password" id="apiKey" class="text-input" placeholder="API Key (optional if set in server/.env)" onchange="onKeyChange()" />
+      <input type="password" id="apiKey" class="text-input" placeholder="API Key (only for OpenAI/Anthropic)" onchange="onKeyChange()" />
       <button id="askBtn" onclick="ask()">Ask</button>
     </div>
     <div id="answerBox"></div>
